@@ -1,4 +1,10 @@
 {
+  "scripts": {
+    "dev": "npm --prefix \"frontend/Eco-Friendly Web App Design (1)\" run dev",
+    "build": "npm --prefix \"frontend/Eco-Friendly Web App Design (1)\" run build",
+    "install:frontend": "npm --prefix \"frontend/Eco-Friendly Web App Design (1)\" install",
+    "postinstall": "npm run install:frontend"
+  },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
