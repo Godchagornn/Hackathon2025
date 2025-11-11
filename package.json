@@ -11,6 +11,7 @@
     "tailwindcss": "^4.1.16"
   },
   "dependencies": {
+    "dotenv": "^17.2.3",
     "pg": "^8.16.3"
   }
 }
