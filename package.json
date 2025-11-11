@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "dev": "npm --prefix \"frontend/Eco-Friendly Web App Design (1)\" run dev",
-    "build": "npm --prefix \"frontend/Eco-Friendly Web App Design (1)\" run build",
-    "install:frontend": "npm --prefix \"frontend/Eco-Friendly Web App Design (1)\" install",
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "install:frontend": "npm --prefix frontend install",
     "postinstall": "npm run install:frontend"
   },
   "devDependencies": {
