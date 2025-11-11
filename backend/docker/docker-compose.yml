@@ -1,0 +1,33 @@
+version: '3.9'
+
+volumes:
+  postgres_data:
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: cmu_sharecycle
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://admin:password@postgres:5432/cmu_sharecycle
+      JWT_SECRET: your_secret_key
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
