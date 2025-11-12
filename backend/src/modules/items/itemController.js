@@ -1,14 +1,38 @@
 const itemService = require('../itemService');
 
+// GET /api/items
 exports.getItems = async (req, res, next) => {
   try {
     const result = await itemService.getAllItems(req.query);
-    res.json(result);
+    res.json(result); // { items, total, page, totalPages }
   } catch (err) {
     next(err);
   }
 };
 
+// GET /api/items/featured
+exports.getFeatured = async (req, res, next) => {
+  try {
+    const limit = req.query.limit || 6;
+    const items = await itemService.getFeatured(limit);
+    res.json(items); // { items: [] }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/items/recommended
+exports.getRecommended = async (req, res, next) => {
+  try {
+    const limit = req.query.limit || 10;
+    const items = await itemService.getRecommended(req.user, limit);
+    res.json(items); // { items: [] }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/items/:itemId
 exports.getItemById = async (req, res, next) => {
   try {
     const item = await itemService.getItemById(req.params.itemId);
@@ -19,30 +43,11 @@ exports.getItemById = async (req, res, next) => {
   }
 };
 
-exports.createItem = async (req, res, next) => {
+// GET /api/items/categories
+exports.getCategories = async (req, res, next) => {
   try {
-    const item = await itemService.createItem(req.body, req.user.id);
-    res.status(201).json({ success: true, item });
-  } catch (err) {
-    next(err);
-  }
-};
-
-exports.updateItem = async (req, res, next) => {
-  try {
-    const item = await itemService.updateItem(req.params.itemId, req.body, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or unauthorized' });
-    res.json({ success: true, item });
-  } catch (err) {
-    next(err);
-  }
-};
-
-exports.deleteItem = async (req, res, next) => {
-  try {
-    const success = await itemService.deleteItem(req.params.itemId, req.user.id);
-    if (!success) return res.status(404).json({ message: 'Item not found or unauthorized' });
-    res.json({ success });
+    const categories = await itemService.getCategories();
+    res.json(categories); // { categories: [] }
   } catch (err) {
     next(err);
   }

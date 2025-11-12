@@ -16,7 +16,7 @@ const Item = sequelize.define('Item', {
   timestamps: true,
   tableName: 'items',
   indexes: [
-    { fields: ['title'] },  // เพิ่ม index สำหรับการค้นหา
+    { fields: ['title'] },
     { fields: ['category'] },
     { fields: ['faculty'] },
     { fields: ['ownerId'] },
