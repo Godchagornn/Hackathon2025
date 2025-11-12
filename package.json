@@ -15,5 +15,20 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "pg": "^8.16.3"
-  }
+  },
+  "name": "hackathon2025",
+  "version": "1.0.0",
+  "description": "1. Copy `.env.example` to `.env` (already prefilled with local defaults) and update the database credentials/port as needed.\r 2. Ensure PostgreSQL is running and accessible via the values in `.env`.\r 3. Apply the database schema:\r    ```bash\r    npm run db:schema\r    ```\r 4. Start the API server:\r    ```bash\r    npm run server\r    ```\r 5. Test the profile endpoint at `GET http://localhost:4000/api/profiles/:id`.",
+  "main": "db.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Godchagornn/Hackathon2025.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Godchagornn/Hackathon2025/issues"
+  },
+  "homepage": "https://github.com/Godchagornn/Hackathon2025#readme"
 }
