@@ -4,7 +4,8 @@
     "build": "npm --prefix frontend run build",
     "install:frontend": "npm --prefix frontend install",
     "server": "node backend/src/server.js",
-    "db:schema": "psql \"$DATABASE_URL\" -f backend/src/database/schema.sql"
+    "db:schema": "psql \"$DATABASE_URL\" -f backend/src/database/schema.sql",
+    "db:seed": "psql \"$DATABASE_URL\" -f backend/src/database/seed.sql"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
@@ -14,6 +15,7 @@
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "nodemailer": "^6.9.16",
     "pg": "^8.16.3"
   }
 }

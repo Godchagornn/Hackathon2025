@@ -7,10 +7,10 @@ interface HeaderProps {
   currentPage: string;
   onNavigate: (page: string) => void;
   notifications: ExchangeNotification[];
-  onAcceptNotification: (notificationId: string) => void;
-  onRejectNotification: (notificationId: string) => void;
+  onAcceptNotification: (notificationId: string) => Promise<void>;
+  onRejectNotification: (notificationId: string) => Promise<void>;
   onStartChat: (notificationId: string) => void;
-  onConfirmComplete: (notificationId: string, code: string) => void;
+  onConfirmComplete: (notificationId: string, code: string) => Promise<void>;
 }
 
 export function Header({ 

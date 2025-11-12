@@ -11,9 +11,15 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { RefreshCw, X, Image as ImageIcon, Send } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 interface ExchangeRequestModalProps {
   open: boolean;
@@ -22,22 +28,26 @@ interface ExchangeRequestModalProps {
     title: string;
     owner: string;
     image: string;
+    ownerId?: number;
+    itemId?: number;
   } | null;
-  onRequestSent?: (data: {
-    offerTitle: string;
-    offerImage: string;
-    offerCategory: string;
-    offerCondition: string;
-    message: string;
-  }) => void;
+  requesterId: number;
+  apiBaseUrl: string;
 }
 
-export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequestSent }: ExchangeRequestModalProps) {
+export function ExchangeRequestModal({
+  open,
+  onOpenChange,
+  targetItem,
+  requesterId,
+  apiBaseUrl,
+}: ExchangeRequestModalProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [offerTitle, setOfferTitle] = useState("");
   const [offerCategory, setOfferCategory] = useState("");
   const [offerCondition, setOfferCondition] = useState("");
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,31 +72,61 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Send request data to parent
-    if (onRequestSent && imagePreview) {
-      onRequestSent({
-        offerTitle,
-        offerImage: imagePreview,
-        offerCategory,
-        offerCondition,
-        message,
-      });
-    }
-    
-    toast.success("🔄 Exchange request sent!", {
-      description: `คำขอแลกเปลี่ยนของคุณถูกส่งไปยัง ${targetItem?.owner} แล้ว รอการตอบกลับใน Notifications`,
-    });
-    
-    // Reset form
+  const resetForm = () => {
     setImagePreview(null);
     setOfferTitle("");
     setOfferCategory("");
     setOfferCondition("");
     setMessage("");
-    onOpenChange(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!targetItem?.ownerId || !targetItem?.itemId) {
+      toast.error("ไม่พบข้อมูลเจ้าของหรือไอเท็มที่จะแลก");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/profiles/${targetItem.ownerId}/notifications`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            requesterId,
+            itemId: targetItem.itemId,
+            message,
+            offer: {
+              title: offerTitle,
+              category: offerCategory,
+              condition: offerCondition,
+            },
+          }),
+        }
+      );
+
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.message ?? "ไม่สามารถส่งคำขอได้");
+      }
+
+      toast.success("🔄 Exchange request sent!", {
+        description: `แจ้งเตือนถูกส่งไปยัง ${targetItem.owner} แล้ว`,
+      });
+      resetForm();
+      onOpenChange(false);
+    } catch (error) {
+      const description =
+        error instanceof Error ? error.message : "Unexpected error";
+      toast.error("ส่งคำขอไม่สำเร็จ", { description });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -103,7 +143,6 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Your Item Image */}
           <div className="space-y-2">
             <Label htmlFor="image">Upload Image of Your Item *</Label>
             {imagePreview ? (
@@ -143,12 +182,10 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
               accept="image/*"
               onChange={handleImageChange}
               className="hidden"
-              required
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Item Name */}
             <div className="space-y-2">
               <Label htmlFor="offerTitle">Your Item Name *</Label>
               <Input
@@ -161,10 +198,13 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
               />
             </div>
 
-            {/* Category */}
             <div className="space-y-2">
               <Label htmlFor="offerCategory">Category *</Label>
-              <Select value={offerCategory} onValueChange={setOfferCategory} required>
+              <Select
+                value={offerCategory}
+                onValueChange={setOfferCategory}
+                required
+              >
                 <SelectTrigger id="offerCategory" className="rounded-xl">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -182,10 +222,13 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Condition */}
             <div className="space-y-2">
               <Label htmlFor="offerCondition">Condition *</Label>
-              <Select value={offerCondition} onValueChange={setOfferCondition} required>
+              <Select
+                value={offerCondition}
+                onValueChange={setOfferCondition}
+                required
+              >
                 <SelectTrigger id="offerCondition" className="rounded-xl">
                   <SelectValue placeholder="Select condition" />
                 </SelectTrigger>
@@ -198,7 +241,6 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
               </Select>
             </div>
 
-            {/* Pickup Location */}
             <div className="space-y-2">
               <Label htmlFor="offerLocation">Your Pickup Location *</Label>
               <Input
@@ -210,7 +252,6 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
             </div>
           </div>
 
-          {/* Description of Your Item */}
           <div className="space-y-2">
             <Label htmlFor="offerDescription">Describe Your Item *</Label>
             <Textarea
@@ -221,7 +262,6 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
             />
           </div>
 
-          {/* Message to Owner */}
           <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/20">
             <Label htmlFor="message" className="flex items-center gap-2">
               <Send className="h-4 w-4 text-primary" />
@@ -244,14 +284,21 @@ export function ExchangeRequestModal({ open, onOpenChange, targetItem, onRequest
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                resetForm();
+                onOpenChange(false);
+              }}
               className="rounded-xl"
             >
               Cancel
             </Button>
-            <Button type="submit" className="rounded-xl gap-2">
+            <Button
+              type="submit"
+              className="rounded-xl gap-2"
+              disabled={isSubmitting}
+            >
               <Send className="h-4 w-4" />
-              Send Exchange Request
+              {isSubmitting ? "Sending..." : "Send Exchange Request"}
             </Button>
           </DialogFooter>
         </form>

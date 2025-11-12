@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, AlertCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Label } from "./ui/label";
+import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { ExchangeNotification } from "./NotificationDropdown";
 
@@ -16,7 +17,7 @@ interface ExchangeDetailsDialogProps {
   notification: ExchangeNotification | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirmComplete: (notificationId: string, code: string) => void;
+  onConfirmComplete: (notificationId: string, code: string) => Promise<void>;
 }
 
 export function ExchangeDetailsDialog({
@@ -26,15 +27,37 @@ export function ExchangeDetailsDialog({
   onConfirmComplete,
 }: ExchangeDetailsDialogProps) {
   const [isVerifying, setIsVerifying] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setCodeInput("");
+      setErrorMessage(null);
+    }
+  }, [open, notification?.id]);
 
   if (!notification) return null;
 
-  const handleConfirmReceived = () => {
+  const handleConfirmReceived = async () => {
+    if (!codeInput.trim()) {
+      setErrorMessage("กรุณากรอกรหัสยืนยันจากเจ้าของ");
+      return;
+    }
+
     setIsVerifying(true);
-    onConfirmComplete(notification.id, "");
-    toast.success("✅ ยืนยันการแลกเปลี่ยนสำเร็จ!");
-    onOpenChange(false);
-    setIsVerifying(false);
+    setErrorMessage(null);
+
+    try {
+      await onConfirmComplete(notification.id, codeInput.trim());
+      toast.success("✅ ยืนยันการแลกเปลี่ยนสำเร็จ!");
+      onOpenChange(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "เกิดข้อผิดพลาด";
+      toast.error("ยืนยันการแลกเปลี่ยนไม่สำเร็จ", { description: message });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const isOwner = notification.direction === "incoming"; // เจ้าของของ (คนที่ถูกขอแลก)
@@ -86,12 +109,34 @@ export function ExchangeDetailsDialog({
                     <p>
                       <strong>คำแนะนำ:</strong> เมื่อพบกันและได้รับของจากเจ้าของแล้ว กดปุ่มด้านล่างเพื่อยืนยันว่าได้รับของเรียบร้อยแล้ว
                     </p>
+                    {notification.exchangeCode ? (
+                      <p className="mt-2">
+                        ใช้รหัสยืนยันจากเจ้าของ:{" "}
+                        <span className="font-mono text-blue-900">{notification.exchangeCode}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-amber-600">รอเจ้าของยืนยันและสร้างรหัสก่อน</p>
+                    )}
                   </div>
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="exchangeCode">กรอกรหัสยืนยัน</Label>
+                <Input
+                  id="exchangeCode"
+                  placeholder="เช่น XC-123456"
+                  value={codeInput}
+                  onChange={(event) => setCodeInput(event.target.value)}
+                  disabled={!notification.exchangeCode}
+                  className="rounded-xl"
+                />
+                {errorMessage && (
+                  <p className="text-xs text-red-600">{errorMessage}</p>
+                )}
+              </div>
               <Button
                 onClick={handleConfirmReceived}
-                disabled={isVerifying}
+                disabled={isVerifying || !notification.exchangeCode}
                 className="w-full rounded-xl gap-2"
               >
                 <Check className="h-4 w-4" />
@@ -111,6 +156,11 @@ export function ExchangeDetailsDialog({
                 <p className="text-xs text-green-700">
                   เมื่อส่งมอบของแล้ว ให้รอผู้รับกดยืนยันว่าได้รับของแล้ว
                 </p>
+                {notification.exchangeCode && (
+                  <p className="text-xs text-green-800 font-mono mt-2">
+                    แชร์รหัสยืนยันนี้ให้ผู้รับ: {notification.exchangeCode}
+                  </p>
+                )}
               </div>
             </div>
           )}

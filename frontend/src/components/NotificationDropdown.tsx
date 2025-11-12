@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Bell, Check, X, MessageCircle, RefreshCw, Eye } from "lucide-react";
+import { Bell, Check, X, MessageCircle, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { ScrollArea } from "./ui/scroll-area";
-import { Separator } from "./ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +20,8 @@ export interface ExchangeNotification {
   direction: "incoming" | "outgoing"; // incoming = คนอื่นขอแลกของเรา, outgoing = เราขอแลกของคนอื่น
   fromUser: {
     name: string;
-    avatar: string;
-    faculty: string;
+    avatar?: string | null;
+    faculty?: string | null;
   };
   offerItem: {
     title: string;
@@ -35,7 +34,7 @@ export interface ExchangeNotification {
     image: string;
   };
   message: string;
-  timestamp: string;
+  timestamp: string | null;
   status: "pending" | "accepted" | "rejected" | "completed";
   bothPartiesAccepted?: boolean; // true = ทั้งสองฝ่ายยอมรับแล้ว, false/undefined = ฝ่ายเดียวยอมรับ
   exchangeCode?: string; // รหัสยืนยันที่สร้างเมื่อ accept
@@ -43,10 +42,10 @@ export interface ExchangeNotification {
 
 interface NotificationDropdownProps {
   notifications: ExchangeNotification[];
-  onAccept: (notificationId: string) => void;
-  onReject: (notificationId: string) => void;
+  onAccept: (notificationId: string) => Promise<void>;
+  onReject: (notificationId: string) => Promise<void>;
   onStartChat: (notificationId: string) => void;
-  onConfirmComplete: (notificationId: string, code: string) => void;
+  onConfirmComplete: (notificationId: string, code: string) => Promise<void>;
 }
 
 export function NotificationDropdown({
@@ -59,6 +58,49 @@ export function NotificationDropdown({
   const [open, setOpen] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<ExchangeNotification | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const formatTimestamp = (value: string | null) => {
+    if (!value) return "—";
+    try {
+      return new Date(value).toLocaleString("th-TH", {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    } catch {
+      return value;
+    }
+  };
+
+  const handleAccept = async (notificationId: string, name: string) => {
+    try {
+      setProcessingId(notificationId);
+      await onAccept(notificationId);
+      toast.success("✅ ยอมรับคำขอแลกเปลี่ยนแล้ว!", {
+        description: `คุณยอมรับคำขอจาก ${name}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error("ไม่สามารถยอมรับคำขอได้", { description: message });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleReject = async (notificationId: string, name: string) => {
+    try {
+      setProcessingId(notificationId);
+      await onReject(notificationId);
+      toast.info("❌ ปฏิเสธคำขอแลกเปลี่ยนแล้ว", {
+        description: `คุณปฏิเสธคำขอจาก ${name}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error("ไม่สามารถปฏิเสธคำขอได้", { description: message });
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   const pendingCount = notifications.filter(n => n.status === "pending").length;
 
@@ -133,20 +175,22 @@ export function NotificationDropdown({
                   {/* Header with Status Badge */}
                   <div className="flex items-start gap-3 mb-3">
                     <Avatar className="h-10 w-10 border-2 border-primary/20">
-                      <AvatarImage src={notification.fromUser.avatar} />
-                      <AvatarFallback>{notification.fromUser.name[0]}</AvatarFallback>
+                      <AvatarImage src={notification.fromUser.avatar ?? undefined} />
+                      <AvatarFallback>{notification.fromUser.name?.[0] ?? "?"}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <p className="font-medium text-sm">{notification.fromUser.name}</p>
-                        <Badge variant="outline" className="text-xs rounded-full">
-                          {notification.fromUser.faculty}
-                        </Badge>
+                        {notification.fromUser.faculty && (
+                          <Badge variant="outline" className="text-xs rounded-full">
+                            {notification.fromUser.faculty}
+                          </Badge>
+                        )}
                         <Badge className={`text-xs rounded-full border ${currentStatus.bgColor} ${currentStatus.textColor} ${currentStatus.borderColor}`}>
                           {currentStatus.label}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">{notification.timestamp}</p>
+                      <p className="text-xs text-muted-foreground">{formatTimestamp(notification.timestamp)}</p>
                     </div>
                   </div>
 
@@ -197,6 +241,11 @@ export function NotificationDropdown({
                     <div className="bg-white rounded-lg p-2 border">
                       <p className="text-xs text-muted-foreground italic">"{notification.message}"</p>
                     </div>
+                    {notification.exchangeCode && (
+                      <div className="mt-2 text-xs text-muted-foreground font-mono">
+                        รหัสยืนยัน: {notification.exchangeCode}
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions - แสดงเฉพาะเมื่อเป็น incoming request */}
@@ -211,12 +260,8 @@ export function NotificationDropdown({
                       <div className="flex gap-2">
                         <Button
                           size="sm"
-                          onClick={() => {
-                            onAccept(notification.id);
-                            toast.success("✅ ยอมรับคำขอแลกเปลี่ยนแล้ว!", {
-                              description: "คุณสามารถเริ่มแชทเพื่อนัดหมายได้แล้ว"
-                            });
-                          }}
+                          disabled={processingId === notification.id}
+                          onClick={() => handleAccept(notification.id, notification.fromUser.name)}
                           className="flex-1 rounded-xl gap-2 bg-[#21834A] hover:bg-[#21834A]/90"
                         >
                           <Check className="h-4 w-4" />
@@ -225,10 +270,8 @@ export function NotificationDropdown({
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => {
-                            onReject(notification.id);
-                            toast.info("❌ ปฏิเสธคำขอแลกเปลี่ยนแล้ว");
-                          }}
+                          disabled={processingId === notification.id}
+                          onClick={() => handleReject(notification.id, notification.fromUser.name)}
                           className="flex-1 rounded-xl gap-2"
                         >
                           <X className="h-4 w-4" />

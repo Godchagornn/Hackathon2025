@@ -58,15 +58,16 @@ import {
   Filter,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ExchangeNotification } from "./NotificationDropdown";
 
 interface ExchangeItem extends ItemCardProps {
   id: number | string;
+  ownerId?: number;
 }
 
 interface LandingPageProps {
   onNavigate: (page: string) => void;
-  onAddNotification: (notification: ExchangeNotification) => void;
+  activeProfileId: number;
+  apiBaseUrl: string;
   availableItems?: ExchangeItem[];
 }
 
@@ -79,50 +80,29 @@ const categories = [
   { name: "Electronics", icon: Laptop, color: "text-green-600", bgColor: "bg-green-50", borderColor: "border-green-200" },
 ];
 
-export function LandingPage({ onNavigate, onAddNotification, availableItems = [] }: LandingPageProps) {
+export function LandingPage({ onNavigate, activeProfileId, apiBaseUrl, availableItems = [] }: LandingPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [exchangeModalOpen, setExchangeModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<{ title: string; owner: string; image: string } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<{
+    title: string;
+    owner: string;
+    image: string;
+    ownerId?: number;
+    itemId?: number;
+  } | null>(null);
   const items: ExchangeItem[] = availableItems;
 
-  const handleExchangeClick = (itemTitle: string, userName: string, itemImage: string) => {
-    setSelectedItem({ title: itemTitle, owner: userName, image: itemImage });
+  const handleExchangeClick = (item: ExchangeItem) => {
+    const numericItemId = Number(item.id);
+    setSelectedItem({
+      title: item.title,
+      owner: item.user,
+      image: item.image,
+      ownerId: item.ownerId,
+      itemId: Number.isNaN(numericItemId) ? undefined : numericItemId,
+    });
     setExchangeModalOpen(true);
-  };
-
-  const handleExchangeRequestSent = (requestData: {
-    offerTitle: string;
-    offerImage: string;
-    offerCategory: string;
-    offerCondition: string;
-    message: string;
-  }) => {
-    // Create notification for the item owner
-    const notification: ExchangeNotification = {
-      id: `notif-${Date.now()}`,
-      type: "exchange_request",
-      fromUser: {
-        name: "You", // In real app, this would be current user's name
-        avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200",
-        faculty: "Engineering", // In real app, this would be current user's faculty
-      },
-      offerItem: {
-        title: requestData.offerTitle,
-        image: requestData.offerImage,
-        category: requestData.offerCategory,
-        condition: requestData.offerCondition,
-      },
-      targetItem: {
-        title: selectedItem?.title || "",
-        image: selectedItem?.image || "",
-      },
-      message: requestData.message,
-      timestamp: "Just now",
-      status: "pending",
-    };
-
-    onAddNotification(notification);
   };
 
   return (
@@ -294,7 +274,7 @@ export function LandingPage({ onNavigate, onAddNotification, availableItems = []
                   <ItemCard 
                     key={item.id} 
                     {...item} 
-                    onExchangeClick={() => handleExchangeClick(item.title, item.user, item.image)}
+                    onExchangeClick={() => handleExchangeClick(item)}
                   />
                 ))}
               </div>
@@ -330,7 +310,8 @@ export function LandingPage({ onNavigate, onAddNotification, availableItems = []
         open={exchangeModalOpen}
         onOpenChange={setExchangeModalOpen}
         targetItem={selectedItem}
-        onRequestSent={handleExchangeRequestSent}
+        requesterId={activeProfileId}
+        apiBaseUrl={apiBaseUrl}
       />
     </div>
   );
