@@ -1,5 +1,6 @@
 const Item = require('../itemModel');
 const { Op } = require('sequelize');
+const sequelize = require('../../database/config.js');
 
 // Validation helper
 const validateItemData = (data, isUpdate = false) => {
@@ -55,6 +56,11 @@ const validateItemData = (data, isUpdate = false) => {
   }
 };
 
+// ======================
+// Home Page APIs
+// ======================
+
+// GET /api/items
 exports.getAllItems = async (query) => {
   try {
     const { page = 1, limit = 10, category, faculty } = query;
@@ -67,13 +73,13 @@ exports.getAllItems = async (query) => {
       where,
       order: [['createdAt', 'DESC']],
       offset: (page - 1) * limit,
-      limit: parseInt(limit),
+      limit: parseInt(limit, 10),
     });
 
     return {
       items: rows,
       total: count,
-      page: parseInt(page),
+      page: parseInt(page, 10),
       totalPages: Math.ceil(count / limit),
     };
   } catch (err) {
@@ -81,54 +87,89 @@ exports.getAllItems = async (query) => {
   }
 };
 
-exports.getItemById = async (itemId) => {
+// GET /api/items/featured
+exports.getFeatured = async (limit = 6) => {
   try {
-    return await Item.findByPk(itemId);
+    const items = await Item.findAll({
+      where: { isActive: true },
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit, 10),
+    });
+    return { items };
   } catch (err) {
     throw err;
   }
+};
+
+// GET /api/items/recommended
+exports.getRecommended = async (user, limit = 10) => {
+  try {
+    if (!user) return { items: [] };
+
+    const where = { isActive: true, ownerId: { [Op.ne]: user.id } };
+    if (user.faculty) where.faculty = user.faculty;
+
+    const items = await Item.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit, 10),
+    });
+
+    return { items };
+  } catch (err) {
+    throw err;
+  }
+};
+
+// GET /api/categories
+exports.getCategories = async () => {
+  try {
+    const categoriesRaw = await Item.findAll({
+      attributes: [[sequelize.fn('DISTINCT', sequelize.col('category')), 'category']],
+      where: { category: { [Op.ne]: null } },
+      raw: true,
+    });
+
+    const categories = categoriesRaw.map((r) => ({ name: r.category })).filter(Boolean);
+    return { categories };
+  } catch (err) {
+    throw err;
+  }
+};
+
+// ======================
+// CRUD APIs (Optional)
+// ======================
+
+exports.getItemById = async (itemId) => {
+  return await Item.findByPk(itemId);
 };
 
 exports.createItem = async (data, userId) => {
-  try {
-    // Validate input
-    validateItemData(data);
-
-    return await Item.create({
-      ...data,
-      ownerId: userId,
-      title: data.title.trim(),
-      category: data.category.trim(),
-    });
-  } catch (err) {
-    throw err;
-  }
+  validateItemData(data);
+  return await Item.create({
+    ...data,
+    ownerId: userId,
+    title: data.title.trim(),
+    category: data.category.trim(),
+  });
 };
 
 exports.updateItem = async (itemId, data, userId) => {
-  try {
-    const item = await Item.findOne({ where: { id: itemId, ownerId: userId } });
-    if (!item) return null;
+  const item = await Item.findOne({ where: { id: itemId, ownerId: userId } });
+  if (!item) return null;
 
-    // Validate input (for update, only validate fields that are being updated)
-    validateItemData(data, true);
+  validateItemData(data, true);
 
-    await item.update({
-      ...data,
-      title: data.title ? data.title.trim() : item.title,
-      category: data.category ? data.category.trim() : item.category,
-    });
-    return item;
-  } catch (err) {
-    throw err;
-  }
+  await item.update({
+    ...data,
+    title: data.title ? data.title.trim() : item.title,
+    category: data.category ? data.category.trim() : item.category,
+  });
+  return item;
 };
 
 exports.deleteItem = async (itemId, userId) => {
-  try {
-    const result = await Item.destroy({ where: { id: itemId, ownerId: userId } });
-    return result > 0;
-  } catch (err) {
-    throw err;
-  }
+  const result = await Item.destroy({ where: { id: itemId, ownerId: userId } });
+  return result > 0;
 };
