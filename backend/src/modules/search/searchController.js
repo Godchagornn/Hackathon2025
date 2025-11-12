@@ -1,6 +1,6 @@
-const searchService = require('../searchService');
+import * as searchService from './searchService.js';
 
-exports.searchItems = async (req, res, next) => {
+export const searchItems = async (req, res, next) => {
   try {
     const result = await searchService.searchItems(req.query);
     res.json(result); // { items, total, filters }
@@ -9,7 +9,7 @@ exports.searchItems = async (req, res, next) => {
   }
 };
 
-exports.getSuggestions = async (req, res, next) => {
+export const getSuggestions = async (req, res, next) => {
   try {
     const suggestions = await searchService.getSuggestions(req.query.q || '');
     res.json({ suggestions }); // { suggestions: [] }
@@ -18,7 +18,7 @@ exports.getSuggestions = async (req, res, next) => {
   }
 };
 
-exports.getFaculties = async (req, res, next) => {
+export const getFaculties = async (req, res, next) => {
   try {
     const faculties = await searchService.getFaculties();
     res.json({ faculties }); // { faculties: [] }

@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import * as searchController from './searchController.js';
+
 const router = express.Router();
-const searchController = require('../searchController');
 
 // Search items with filters
 router.get('/search', searchController.searchItems);
@@ -11,4 +12,4 @@ router.get('/search/suggestions', searchController.getSuggestions);
 // Faculties filter
 router.get('/filters/faculties', searchController.getFaculties);
 
-module.exports = router;
+export default router;

@@ -1,8 +1,9 @@
-const Item = require('../../items/itemModel');
-const { Op } = require('sequelize');
+import pool from '../../database/config.js';
 
+// ========================
 // Search items with filters
-exports.searchItems = async (query) => {
+// ========================
+export const searchItems = async (query) => {
   try {
     const {
       q = '',
@@ -14,52 +15,61 @@ exports.searchItems = async (query) => {
       limit = 10,
     } = query;
 
-    const where = { isActive: true };
+    let baseQuery = 'FROM items WHERE "isActive" = true';
+    const params = [];
+    let i = 1;
 
-    // Search in title and description
     if (q.trim()) {
-      where[Op.or] = [
-        { title: { [Op.iLike]: `%${q.trim()}%` } },
-        { description: { [Op.iLike]: `%${q.trim()}%` } },
-      ];
+      baseQuery += ` AND (LOWER(title) LIKE LOWER($${i}) OR LOWER(description) LIKE LOWER($${i}))`;
+      params.push(`%${q.trim()}%`);
+      i++;
     }
 
-    if (category) where.category = category;
-    if (faculty) where.faculty = faculty;
-    if (condition) where.condition = condition;
+    if (category) {
+      baseQuery += ` AND category = $${i}`;
+      params.push(category);
+      i++;
+    }
+
+    if (faculty) {
+      baseQuery += ` AND faculty = $${i}`;
+      params.push(faculty);
+      i++;
+    }
+
+    if (condition) {
+      baseQuery += ` AND condition = $${i}`;
+      params.push(condition);
+      i++;
+    }
 
     // Sorting
-    let order = [['createdAt', 'DESC']];
-    if (sort === 'oldest') order = [['createdAt', 'ASC']];
-    if (sort === 'popular') order = [['views', 'DESC']]; // optional, if you have views column
+    let orderBy = 'ORDER BY "createdAt" DESC';
+    if (sort === 'oldest') orderBy = 'ORDER BY "createdAt" ASC';
+    if (sort === 'popular') orderBy = 'ORDER BY views DESC'; // optional column
 
-    const { count, rows } = await Item.findAndCountAll({
-      where,
-      order,
-      offset: (page - 1) * limit,
-      limit: parseInt(limit, 10),
-    });
+    const offset = (page - 1) * limit;
+    const itemsQuery = `
+      SELECT * ${baseQuery}
+      ${orderBy}
+      LIMIT $${i++} OFFSET $${i}
+    `;
+    params.push(limit, offset);
 
-    // Filters options to return
-    const filters = {
-      categories: await Item.findAll({
-        attributes: ['category'],
-        group: ['category'],
-        raw: true,
-      }),
-      faculties: await Item.findAll({
-        attributes: ['faculty'],
-        group: ['faculty'],
-        raw: true,
-      }),
-      conditions: ['new', 'used'],
-    };
+    const totalQuery = `SELECT COUNT(*) ${baseQuery}`;
+    const [itemsRes, totalRes] = await Promise.all([
+      pool.query(itemsQuery, params),
+      pool.query(totalQuery, params.slice(0, params.length - 2)),
+    ]);
+
+    // Filters options
+    const filters = await getFilters();
 
     return {
-      items: rows,
-      total: count,
+      items: itemsRes.rows,
+      total: parseInt(totalRes.rows[0].count, 10),
       page: parseInt(page, 10),
-      totalPages: Math.ceil(count / limit),
+      totalPages: Math.ceil(totalRes.rows[0].count / limit),
       filters,
     };
   } catch (err) {
@@ -67,35 +77,42 @@ exports.searchItems = async (query) => {
   }
 };
 
-// Search suggestions by title
-exports.getSuggestions = async (q) => {
-  try {
-    if (!q.trim()) return [];
+// ========================
+// Suggestions
+// ========================
+export const getSuggestions = async (q) => {
+  if (!q.trim()) return [];
 
-    const items = await Item.findAll({
-      where: { isActive: true, title: { [Op.iLike]: `%${q.trim()}%` } },
-      attributes: ['title'],
-      limit: 5,
-    });
+  const { rows } = await pool.query(
+    'SELECT title FROM items WHERE "isActive" = true AND LOWER(title) LIKE LOWER($1) LIMIT 5',
+    [`%${q.trim()}%`]
+  );
 
-    return items.map((i) => i.title);
-  } catch (err) {
-    throw err;
-  }
+  return rows.map((r) => r.title);
 };
 
-// Get list of faculties for filter
-exports.getFaculties = async () => {
-  try {
-    const facultiesRaw = await Item.findAll({
-      attributes: ['faculty'],
-      where: { faculty: { [Op.ne]: null } },
-      group: ['faculty'],
-      raw: true,
-    });
+// ========================
+// Faculties
+// ========================
+export const getFaculties = async () => {
+  const { rows } = await pool.query(
+    'SELECT DISTINCT faculty FROM items WHERE faculty IS NOT NULL'
+  );
+  return rows.map((r) => ({ name: r.faculty })).filter(Boolean);
+};
 
-    return facultiesRaw.map((f) => ({ name: f.faculty })).filter(Boolean);
-  } catch (err) {
-    throw err;
-  }
+// ========================
+// Filters helper
+// ========================
+const getFilters = async () => {
+  const [categoriesRes, facultiesRes] = await Promise.all([
+    pool.query('SELECT DISTINCT category FROM items WHERE category IS NOT NULL'),
+    pool.query('SELECT DISTINCT faculty FROM items WHERE faculty IS NOT NULL'),
+  ]);
+
+  return {
+    categories: categoriesRes.rows.map((r) => ({ name: r.category })),
+    faculties: facultiesRes.rows.map((r) => ({ name: r.faculty })),
+    conditions: ['new', 'used'],
+  };
 };

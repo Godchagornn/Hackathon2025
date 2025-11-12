@@ -1,8 +1,12 @@
-const dotenv = require('dotenv');
+import express from 'express';
+import dotenv from 'dotenv';
+import mainRoutes from './routes/index.js';
 
 dotenv.config();
+const app = express();
+app.use(express.json());
 
-const app = require('./app');
+app.use('/api', mainRoutes);
 
 const PORT = Number(process.env.PORT) || 4000;
 
