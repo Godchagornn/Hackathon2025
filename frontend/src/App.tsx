@@ -12,34 +12,72 @@ import { Toaster } from "./components/ui/sonner";
 import { ExchangeNotification } from "./components/NotificationDropdown";
 import { toast } from "sonner";
 import { API_BASE_URL, ACTIVE_PROFILE_ID } from "./config";
+import type { AuthSessionPayload } from "./types/auth";
+import type { ItemCardProps } from "./components/ItemCard";
 
 type Page = "home" | "share" | "profile" | "messages";
 type AuthPage = "login" | "register";
 
+type ItemCardData = ItemCardProps & {
+  id: number;
+  ownerId: number;
+  description?: string | null;
+  images?: string[];
+};
+
+const PLACEHOLDER_IMAGE = "https://placehold.co/600x400?text=ShareCycle";
+
+const mapApiItemToCard = (item: any): ItemCardData => ({
+  id: item.id,
+  ownerId: item.ownerId ?? item.user_id ?? 0,
+  title: item.title,
+  category: item.category ?? "General",
+  condition: item.condition ?? "good",
+  status: item.status ?? "available",
+  image: item.images?.[0] ?? PLACEHOLDER_IMAGE,
+  location: item.owner?.faculty ?? "Chiang Mai University",
+  user: item.owner?.name ?? "CMU Student",
+  ecoScore: undefined,
+  expiryDate: undefined,
+  description: item.description,
+  images: item.images ?? [],
+});
+
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authSession, setAuthSession] = useState<AuthSessionPayload | null>(null);
   const [authPage, setAuthPage] = useState<AuthPage>("login");
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [notifications, setNotifications] = useState<ExchangeNotification[]>([]);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(3);
   const [profileInfo, setProfileInfo] = useState<ProfileInfo | undefined>();
   const [profilePosts, setProfilePosts] = useState<ProfilePost[]>([]);
+  const [items, setItems] = useState<ItemCardData[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("cmu_session");
+      if (stored) {
+        setAuthSession(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.warn("ไม่สามารถอ่าน session จาก localStorage", error);
+    }
+  }, [API_BASE_URL]);
+
+  const isLoggedIn = Boolean(authSession);
+  const resolvedProfileId = authSession?.user.id ?? ACTIVE_PROFILE_ID;
 
   const handleNavigate = (page: string) => {
     setCurrentPage(page as Page);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleLoginSuccess = () => {
-    setIsLoggedIn(true);
-  };
-
-  const handleRegisterSuccess = () => {
-    setIsLoggedIn(true);
+  const handleAuthSuccess = (session: AuthSessionPayload) => {
+    setAuthSession(session);
+    localStorage.setItem("cmu_session", JSON.stringify(session));
   };
 
   const handleStartChat = (_notificationId: string) => {
-    // Find the notification
     setCurrentPage("messages");
   };
 
@@ -95,45 +133,111 @@ export default function App() {
     return [...itemPosts, ...exchangePosts];
   }, []);
 
-  const loadProfile = useCallback(async () => {
+  const loadItems = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/profiles/${ACTIVE_PROFILE_ID}`);
+      const response = await fetch(`${API_BASE_URL}/items`);
       const body = await response.json();
       if (!response.ok) {
-        throw new Error(body?.message ?? "Failed to fetch profile");
+        throw new Error(body?.message ?? "โหลดรายการไม่สำเร็จ");
       }
-
-      setProfileInfo(mapProfileResponse(body));
-      setProfilePosts(mapPostsResponse(body));
+      const mapped = (body.items ?? []).map(mapApiItemToCard);
+      setItems(mapped);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected error";
-      toast.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ", { description: message });
+      toast.error("โหลดสินค้าไม่สำเร็จ", { description: message });
     }
-  }, [mapPostsResponse, mapProfileResponse, API_BASE_URL, ACTIVE_PROFILE_ID]);
+  }, [API_BASE_URL]);
 
-  const loadNotifications = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/profiles/${ACTIVE_PROFILE_ID}/notifications`);
-      const body = await response.json();
-      if (!response.ok) {
-        throw new Error(body?.message ?? "Failed to load notifications");
+  const loadConversationSummary = useCallback(
+    async (token: string) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/messages/conversations`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.message ?? "ไม่สามารถโหลดสถานะแชท");
+        }
+        const totalUnread = (body.conversations ?? []).reduce(
+          (sum: number, conv: any) => sum + (conv.unreadCount ?? 0),
+          0
+        );
+        setUnreadMessagesCount(totalUnread);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error";
+        toast.error("โหลดสถานะแชทไม่สำเร็จ", { description: message });
       }
+    },
+    [API_BASE_URL]
+  );
 
-      setNotifications(body.notifications ?? []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unexpected error";
-      toast.error("โหลดการแจ้งเตือนไม่สำเร็จ", { description: message });
-    }
-  }, [API_BASE_URL, ACTIVE_PROFILE_ID]);
+  const handleConversationSnapshot = useCallback((list: Array<{ unreadCount?: number }>) => {
+    const total = list.reduce((sum, conv) => sum + (conv.unreadCount ?? 0), 0);
+    setUnreadMessagesCount(total);
+  }, []);
+
+  const loadProfile = useCallback(
+    async (profileId: number, token: string) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/profiles/${profileId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.message ?? "Failed to fetch profile");
+        }
+
+        setProfileInfo(mapProfileResponse(body));
+        setProfilePosts(mapPostsResponse(body));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error";
+        toast.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ", { description: message });
+      }
+    },
+    [API_BASE_URL, mapPostsResponse, mapProfileResponse]
+  );
+
+  const loadNotifications = useCallback(
+    async (profileId: number, token: string) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/profiles/${profileId}/notifications`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.message ?? "Failed to load notifications");
+        }
+
+        setNotifications(body.notifications ?? []);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error";
+        toast.error("โหลดการแจ้งเตือนไม่สำเร็จ", { description: message });
+      }
+    },
+    [API_BASE_URL]
+  );
 
   const performNotificationAction = useCallback(
-    async (notificationId: string, action: "accept" | "reject" | "complete", payload?: Record<string, unknown>) => {
+    async (
+      profileId: number,
+      notificationId: string,
+      action: "accept" | "reject" | "complete",
+      token: string,
+      payload?: Record<string, unknown>
+    ) => {
       const response = await fetch(
-        `${API_BASE_URL}/profiles/${ACTIVE_PROFILE_ID}/notifications/${notificationId}/${action === "complete" ? "complete" : action}`,
+        `${API_BASE_URL}/profiles/${profileId}/notifications/${notificationId}/${action === "complete" ? "complete" : action}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: action === "complete" ? JSON.stringify(payload ?? {}) : undefined,
         }
@@ -149,45 +253,62 @@ export default function App() {
         throw new Error("ไม่มีข้อมูลการแจ้งเตือนที่อัปเดต");
       }
 
-      setNotifications(prev =>
+      setNotifications((prev) =>
         prev.map((notif) => (notif.id === body.notification.id ? body.notification : notif))
       );
 
       return body.notification as ExchangeNotification;
     },
-    [API_BASE_URL, ACTIVE_PROFILE_ID]
+    [API_BASE_URL]
   );
+
+  const authToken = authSession?.token ?? "";
 
   const handleAcceptNotification = useCallback(
     async (notificationId: string) => {
-      await performNotificationAction(notificationId, "accept");
-      await loadNotifications();
+      if (!authToken) return;
+      await performNotificationAction(resolvedProfileId, notificationId, "accept", authToken);
+      await loadNotifications(resolvedProfileId, authToken);
     },
-    [performNotificationAction, loadNotifications]
+    [performNotificationAction, loadNotifications, resolvedProfileId, authToken]
   );
 
   const handleRejectNotification = useCallback(
     async (notificationId: string) => {
-      await performNotificationAction(notificationId, "reject");
-      await loadNotifications();
+      if (!authToken) return;
+      await performNotificationAction(resolvedProfileId, notificationId, "reject", authToken);
+      await loadNotifications(resolvedProfileId, authToken);
     },
-    [performNotificationAction, loadNotifications]
+    [performNotificationAction, loadNotifications, resolvedProfileId, authToken]
   );
 
   const handleConfirmComplete = useCallback(
     async (notificationId: string, code: string) => {
-      await performNotificationAction(notificationId, "complete", { code });
-      await loadNotifications();
+      if (!authToken) return;
+      await performNotificationAction(resolvedProfileId, notificationId, "complete", authToken, { code });
+      await loadNotifications(resolvedProfileId, authToken);
     },
-    [performNotificationAction, loadNotifications]
+    [performNotificationAction, loadNotifications, resolvedProfileId, authToken]
   );
 
   useEffect(() => {
-    if (isLoggedIn) {
-      loadProfile();
-      loadNotifications();
+    if (isLoggedIn && authToken) {
+      loadProfile(resolvedProfileId, authToken);
+      loadNotifications(resolvedProfileId, authToken);
     }
-  }, [isLoggedIn, loadNotifications, loadProfile]);
+  }, [isLoggedIn, authToken, resolvedProfileId, loadNotifications, loadProfile]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadItems();
+    }
+  }, [isLoggedIn, loadItems]);
+
+  useEffect(() => {
+    if (isLoggedIn && authToken) {
+      loadConversationSummary(authToken);
+    }
+  }, [isLoggedIn, authToken, loadConversationSummary]);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -195,39 +316,60 @@ export default function App() {
         return (
           <LandingPage
             onNavigate={handleNavigate}
-            activeProfileId={ACTIVE_PROFILE_ID}
+            activeProfileId={resolvedProfileId}
             apiBaseUrl={API_BASE_URL}
+            authToken={authToken}
+            items={items}
+            onRefreshItems={loadItems}
           />
         );
       case "share":
-        return <SharePage onNavigate={handleNavigate} />;
+        return (
+          <SharePage
+            onNavigate={handleNavigate}
+            items={items}
+            apiBaseUrl={API_BASE_URL}
+            authToken={authToken}
+            activeProfileId={resolvedProfileId}
+            onRefreshItems={loadItems}
+          />
+        );
       case "messages":
-        return <MessagesPage />;
+        return (
+          <MessagesPage
+            apiBaseUrl={API_BASE_URL}
+            authToken={authToken}
+            currentUserId={resolvedProfileId}
+            onConversationsSnapshot={handleConversationSnapshot}
+          />
+        );
       case "profile":
         return <ProfilePage profile={profileInfo} posts={profilePosts} />;
       default:
         return (
           <LandingPage
             onNavigate={handleNavigate}
-            activeProfileId={ACTIVE_PROFILE_ID}
+            activeProfileId={resolvedProfileId}
             apiBaseUrl={API_BASE_URL}
+            authToken={authToken}
+            items={items}
+            onRefreshItems={loadItems}
           />
         );
     }
   };
 
-  // Show auth pages if not logged in
   if (!isLoggedIn) {
     return (
       <>
         {authPage === "login" ? (
-          <LoginPage 
-            onLoginSuccess={handleLoginSuccess} 
+          <LoginPage
+            onLoginSuccess={handleAuthSuccess}
             onNavigateToRegister={() => setAuthPage("register")}
           />
         ) : (
-          <RegisterPage 
-            onRegisterSuccess={handleRegisterSuccess}
+          <RegisterPage
+            onRegisterSuccess={handleAuthSuccess}
             onBackToLogin={() => setAuthPage("login")}
           />
         )}
@@ -238,8 +380,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header 
-        currentPage={currentPage} 
+      <Header
+        currentPage={currentPage}
         onNavigate={handleNavigate}
         notifications={notifications}
         onAcceptNotification={handleAcceptNotification}
@@ -247,19 +389,16 @@ export default function App() {
         onStartChat={handleStartChat}
         onConfirmComplete={handleConfirmComplete}
       />
-      <main className="flex-1">
-        {renderPage()}
-      </main>
+      <main className="flex-1">{renderPage()}</main>
       <Footer />
-      
-      {/* Floating Messages Button - Only show when not on messages page */}
+
       {currentPage !== "messages" && (
         <FloatingMessagesButton
           unreadCount={unreadMessagesCount}
           onClick={() => handleNavigate("messages")}
         />
       )}
-      
+
       <Toaster position="top-center" />
     </div>
   );

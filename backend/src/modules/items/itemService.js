@@ -1,134 +1,171 @@
-const Item = require('../itemModel');
-const { Op } = require('sequelize');
+const itemModel = require('./itemModel');
+const notificationService = require('../notifications/notificationService');
 
-// Validation helper
-const validateItemData = (data, isUpdate = false) => {
+function validateItemPayload(payload, { partial = false } = {}) {
   const errors = [];
+  const fields = ['title', 'category', 'condition', 'status'];
 
-  if (!isUpdate || data.title !== undefined) {
-    if (!data.title || typeof data.title !== 'string' || data.title.trim().length === 0) {
-      errors.push('Title is required and must be a non-empty string');
+  if (!partial || payload.title !== undefined) {
+    if (!payload.title || typeof payload.title !== 'string' || payload.title.trim().length < 3) {
+      errors.push('title ต้องมีอย่างน้อย 3 ตัวอักษร');
     }
   }
 
-  if (!isUpdate || data.category !== undefined) {
-    if (!data.category || typeof data.category !== 'string' || data.category.trim().length === 0) {
-      errors.push('Category is required and must be a non-empty string');
+  if (!partial || payload.category !== undefined) {
+    if (!payload.category || typeof payload.category !== 'string') {
+      errors.push('category จำเป็น');
     }
   }
 
-  if (!isUpdate || data.condition !== undefined) {
-    if (data.condition && !['new', 'used'].includes(data.condition)) {
-      errors.push('Condition must be either "new" or "used"');
+  if (!partial || payload.condition !== undefined) {
+    if (payload.condition && !['new', 'good', 'fair', 'used'].includes(payload.condition)) {
+      errors.push('condition ต้องเป็น new/good/fair/used');
     }
   }
 
-  if (!isUpdate || data.description !== undefined) {
-    if (data.description && typeof data.description !== 'string') {
-      errors.push('Description must be a string');
+  if (!partial || payload.status !== undefined) {
+    if (payload.status && !['available', 'pending', 'exchanged', 'archived'].includes(payload.status)) {
+      errors.push('status ไม่ถูกต้อง');
     }
   }
 
-  if (!isUpdate || data.faculty !== undefined) {
-    if (data.faculty && typeof data.faculty !== 'string') {
-      errors.push('Faculty must be a string');
-    }
+  if (payload.images && !Array.isArray(payload.images)) {
+    errors.push('images ต้องเป็น array');
   }
 
-  if (!isUpdate || data.tags !== undefined) {
-    if (data.tags && !Array.isArray(data.tags)) {
-      errors.push('Tags must be an array');
-    }
-  }
-
-  if (!isUpdate || data.images !== undefined) {
-    if (data.images && !Array.isArray(data.images)) {
-      errors.push('Images must be an array');
-    }
+  if (payload.tags && !Array.isArray(payload.tags)) {
+    errors.push('tags ต้องเป็น array');
   }
 
   if (errors.length > 0) {
-    const error = new Error('Validation failed');
-    error.statusCode = 400;
-    error.details = errors;
+    const err = new Error('Validation failed');
+    err.statusCode = 400;
+    err.details = errors;
+    throw err;
+  }
+}
+
+function mapItem(itemRow) {
+  if (!itemRow) return null;
+  return {
+    id: itemRow.id,
+    ownerId: itemRow.user_id,
+    title: itemRow.title,
+    description: itemRow.description,
+    category: itemRow.category,
+    condition: itemRow.condition,
+    status: itemRow.status,
+    images: itemRow.images || [],
+    tags: itemRow.tags || [],
+    createdAt: itemRow.created_at,
+    updatedAt: itemRow.updated_at,
+    owner: {
+      name: itemRow.owner_name,
+      faculty: itemRow.owner_faculty,
+      avatar: itemRow.owner_avatar,
+    },
+  };
+}
+
+async function listItems(filters) {
+  const limit = Math.min(Number(filters.limit) || 12, 50);
+  const offset = ((Number(filters.page) || 1) - 1) * limit;
+  const search = filters.search ? filters.search.trim() : undefined;
+  const status = filters.status === 'all' ? undefined : filters.status;
+
+  const result = await itemModel.listItems({
+    search,
+    category: filters.category,
+    ownerId: filters.ownerId,
+    status,
+    limit,
+    offset,
+  });
+
+  return {
+    items: result.items.map(mapItem),
+    pagination: {
+      total: result.total,
+      page: Number(filters.page) || 1,
+      pageSize: limit,
+      totalPages: Math.ceil(result.total / limit),
+    },
+  };
+}
+
+async function getItem(itemId) {
+  const item = await itemModel.findItemById(itemId);
+  return mapItem(item);
+}
+
+async function createItem(payload, ownerId) {
+  validateItemPayload(payload);
+  const newItem = await itemModel.insertItem({
+    userId: ownerId,
+    title: payload.title.trim(),
+    description: payload.description || null,
+    category: payload.category.trim(),
+    condition: payload.condition || 'good',
+    status: payload.status || 'available',
+    images: payload.images || [],
+    tags: payload.tags || [],
+  });
+  const withOwner = await itemModel.findItemById(newItem.id);
+  return mapItem(withOwner);
+}
+
+async function updateItem(itemId, ownerId, payload) {
+  validateItemPayload(payload, { partial: true });
+  const updates = {};
+  ['title', 'description', 'category', 'condition', 'status'].forEach((field) => {
+    if (payload[field] !== undefined) {
+      updates[field] =
+        typeof payload[field] === 'string' ? payload[field].trim() : payload[field];
+    }
+  });
+  if (payload.images !== undefined) updates.images = payload.images;
+  if (payload.tags !== undefined) updates.tags = payload.tags;
+
+  const updated = await itemModel.updateItem(itemId, ownerId, updates);
+  if (!updated) return null;
+  const withOwner = await itemModel.findItemById(itemId);
+  return mapItem(withOwner);
+}
+
+async function deleteItem(itemId, ownerId) {
+  return itemModel.deleteItem(itemId, ownerId);
+}
+
+async function createExchangeRequest({ itemId, requesterId, message, offer }) {
+  const owner = await itemModel.findItemOwner(itemId);
+  if (!owner) {
+    const error = new Error('ไม่พบสินค้า');
+    error.statusCode = 404;
     throw error;
   }
-};
 
-exports.getAllItems = async (query) => {
-  try {
-    const { page = 1, limit = 10, category, faculty } = query;
-
-    const where = { isActive: true };
-    if (category) where.category = category;
-    if (faculty) where.faculty = faculty;
-
-    const { count, rows } = await Item.findAndCountAll({
-      where,
-      order: [['createdAt', 'DESC']],
-      offset: (page - 1) * limit,
-      limit: parseInt(limit),
-    });
-
-    return {
-      items: rows,
-      total: count,
-      page: parseInt(page),
-      totalPages: Math.ceil(count / limit),
-    };
-  } catch (err) {
-    throw err;
+  if (owner.user_id === requesterId) {
+    const error = new Error('ไม่สามารถขอแลกสินค้าตัวเองได้');
+    error.statusCode = 400;
+    throw error;
   }
-};
 
-exports.getItemById = async (itemId) => {
-  try {
-    return await Item.findByPk(itemId);
-  } catch (err) {
-    throw err;
-  }
-};
+  const request = await notificationService.createExchangeRequestNotification({
+    ownerId: owner.user_id,
+    requesterId,
+    itemId,
+    message,
+    offer,
+  });
 
-exports.createItem = async (data, userId) => {
-  try {
-    // Validate input
-    validateItemData(data);
+  return request;
+}
 
-    return await Item.create({
-      ...data,
-      ownerId: userId,
-      title: data.title.trim(),
-      category: data.category.trim(),
-    });
-  } catch (err) {
-    throw err;
-  }
-};
-
-exports.updateItem = async (itemId, data, userId) => {
-  try {
-    const item = await Item.findOne({ where: { id: itemId, ownerId: userId } });
-    if (!item) return null;
-
-    // Validate input (for update, only validate fields that are being updated)
-    validateItemData(data, true);
-
-    await item.update({
-      ...data,
-      title: data.title ? data.title.trim() : item.title,
-      category: data.category ? data.category.trim() : item.category,
-    });
-    return item;
-  } catch (err) {
-    throw err;
-  }
-};
-
-exports.deleteItem = async (itemId, userId) => {
-  try {
-    const result = await Item.destroy({ where: { id: itemId, ownerId: userId } });
-    return result > 0;
-  } catch (err) {
-    throw err;
-  }
+module.exports = {
+  listItems,
+  getItem,
+  createItem,
+  updateItem,
+  deleteItem,
+  createExchangeRequest,
 };

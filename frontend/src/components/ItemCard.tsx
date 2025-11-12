@@ -11,6 +11,10 @@ export interface ItemCardProps {
   condition: string;
   location: string;
   user: string;
+  ownerId?: number;
+  status?: string;
+  description?: string | null;
+  images?: string[];
   ecoScore?: number;
   expiryDate?: string; // NEW: expiry date for the post
   onExchangeClick?: () => void;

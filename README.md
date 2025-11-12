@@ -17,6 +17,13 @@
    npm run server
    ```
 6. Test the API:
+   - Auth register: `POST http://localhost:4000/api/auth/register`
+   - Auth login: `POST http://localhost:4000/api/auth/login`
+   - Items list: `GET http://localhost:4000/api/items`
+   - Create item (auth required): `POST http://localhost:4000/api/items`
+   - Update item: `PATCH http://localhost:4000/api/items/:itemId`
+   - Delete item: `DELETE http://localhost:4000/api/items/:itemId`
+   - Request exchange: `POST http://localhost:4000/api/items/:itemId/requests`
    - Profile overview: `GET http://localhost:4000/api/profiles/:id`
    - Notifications feed: `GET http://localhost:4000/api/profiles/:id/notifications`
    - Accept a notification (owner only): `POST http://localhost:4000/api/profiles/:id/notifications/:notificationId/accept`
@@ -36,6 +43,12 @@
      }
      ```
 
+### Messaging + realtime
+
+- Conversations: `GET/POST http://localhost:4000/api/messages/conversations`
+- Messages: `GET/POST http://localhost:4000/api/messages/conversations/:conversationId/messages`
+- WebSocket endpoint: connect to `ws://<API_HOST>/` using Socket.IO with `auth: { token: <JWT> }` and listen for `message:new`.
+
 The server responds with the updated notification payload so the frontend can refresh state without extra queries.
 
 ### SMTP configuration
@@ -52,6 +65,13 @@ SMTP_FROM_EMAIL="CMU ShareCycle <noreply@cmu.ac.th>"
 ```
 
 If these values are missing, the server will log a warning and skip email delivery (useful for local development).
+
+### Auth configuration
+
+- `AUTH_SALT_ROUNDS` (default `10`): bcrypt salt rounds used to hash user passwords.
+- `AUTH_JWT_SECRET`: secret key for signing JWT access tokens.
+- `AUTH_JWT_EXPIRES_IN` (default `7d`): token lifetime string (e.g., `1h`, `7d`).
+- `WS_CORS_ORIGIN` (optional): comma-separated list of origins allowed to open the realtime Socket.IO connection (defaults to `*`).
 
 ## Frontend setup
 

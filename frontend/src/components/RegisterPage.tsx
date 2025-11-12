@@ -4,11 +4,13 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Leaf, Mail, Lock, Eye, EyeOff, User, Building2, ArrowLeft } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { API_BASE_URL } from "../config";
+import type { AuthSessionPayload } from "../types/auth";
 
 interface RegisterPageProps {
-  onRegisterSuccess: () => void;
+  onRegisterSuccess: (session: AuthSessionPayload) => void;
   onBackToLogin: () => void;
 }
 
@@ -24,6 +26,7 @@ export function RegisterPage({ onRegisterSuccess, onBackToLogin }: RegisterPageP
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const faculties = [
     "คณะวิศวกรรมศาสตร์",
@@ -40,7 +43,7 @@ export function RegisterPage({ onRegisterSuccess, onBackToLogin }: RegisterPageP
     "คณะศิลปกรรมศาสตร์",
   ];
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     // Validation
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.faculty || !formData.studentId) {
@@ -63,8 +66,35 @@ export function RegisterPage({ onRegisterSuccess, onBackToLogin }: RegisterPageP
       return;
     }
 
-    toast.success("สมัครสมาชิกสำเร็จ! ยินดีต้อนรับสู่ CMU ShareCycle");
-    onRegisterSuccess();
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+          faculty: formData.faculty,
+        }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.message ?? "สมัครสมาชิกไม่สำเร็จ");
+      }
+
+      toast.success("สมัครสมาชิกสำเร็จ! ยินดีต้อนรับสู่ CMU ShareCycle");
+      onRegisterSuccess(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error";
+      toast.error("สมัครสมาชิกไม่สำเร็จ", { description: message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -266,12 +296,8 @@ export function RegisterPage({ onRegisterSuccess, onBackToLogin }: RegisterPageP
                   </div>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full rounded-xl"
-                  size="lg"
-                >
-                  สมัครสมาชิก
+                <Button type="submit" className="w-full rounded-xl" size="lg" disabled={isSubmitting}>
+                  {isSubmitting ? "กำลังสมัครสมาชิก..." : "สมัครสมาชิก"}
                 </Button>
 
                 <div className="relative my-6">

@@ -33,6 +33,7 @@ interface ExchangeRequestModalProps {
   } | null;
   requesterId: number;
   apiBaseUrl: string;
+  authToken: string;
 }
 
 export function ExchangeRequestModal({
@@ -41,6 +42,7 @@ export function ExchangeRequestModal({
   targetItem,
   requesterId,
   apiBaseUrl,
+  authToken,
 }: ExchangeRequestModalProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [offerTitle, setOfferTitle] = useState("");
@@ -90,25 +92,23 @@ export function ExchangeRequestModal({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(
-        `${apiBaseUrl}/profiles/${targetItem.ownerId}/notifications`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+      const response = await fetch(`${apiBaseUrl}/profiles/${targetItem.ownerId}/notifications`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          requesterId,
+          itemId: targetItem.itemId,
+          message,
+          offer: {
+            title: offerTitle,
+            category: offerCategory,
+            condition: offerCondition,
           },
-          body: JSON.stringify({
-            requesterId,
-            itemId: targetItem.itemId,
-            message,
-            offer: {
-              title: offerTitle,
-              category: offerCategory,
-              condition: offerCondition,
-            },
-          }),
-        }
-      );
+        }),
+      });
 
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {

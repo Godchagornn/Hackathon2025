@@ -1,15 +1,16 @@
 const express = require('express');
+const controller = require('./itemController');
+const requireAuth = require('../../middleware/auth');
+
 const router = express.Router();
-const itemController = require('../itemController');
-const { protect } = require('../../../middleware/authMiddleware');
 
-// GET routes ต้องไปหน้า POST routes
-router.post('/', protect, itemController.createItem);
-router.put('/:itemId', protect, itemController.updateItem);
-router.delete('/:itemId', protect, itemController.deleteItem);
+router.get('/', controller.listItems);
+router.get('/:itemId', controller.getItem);
 
-// Routes ที่ไม่ใช่ protected
-router.get('/', itemController.getItems);
-router.get('/:itemId', itemController.getItemById);
+router.post('/', requireAuth, controller.createItem);
+router.patch('/:itemId', requireAuth, controller.updateItem);
+router.delete('/:itemId', requireAuth, controller.deleteItem);
+
+router.post('/:itemId/requests', requireAuth, controller.requestExchange);
 
 module.exports = router;

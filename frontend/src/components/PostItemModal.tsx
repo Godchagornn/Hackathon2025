@@ -12,23 +12,40 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Upload, Leaf, X, Image as ImageIcon, RefreshCw, Package, Calendar } from "lucide-react";
+import { Leaf, X, Image as ImageIcon, RefreshCw, Package, Calendar, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 interface PostItemModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  apiBaseUrl: string;
+  authToken: string;
+  onItemPosted?: () => void;
 }
 
-export function PostItemModal({ open, onOpenChange }: PostItemModalProps) {
+export function PostItemModal({
+  open,
+  onOpenChange,
+  apiBaseUrl,
+  authToken,
+  onItemPosted,
+}: PostItemModalProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [condition, setCondition] = useState("");
+  const [lookingFor, setLookingFor] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [pickupLocation, setPickupLocation] = useState("");
+  const [description, setDescription] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        toast.error("File size must be less than 5MB");
+        toast.error("ไฟล์ภาพต้องไม่เกิน 5MB");
         return;
       }
       const reader = new FileReader();
@@ -46,14 +63,60 @@ export function PostItemModal({ open, onOpenChange }: PostItemModalProps) {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success("🌱 Item posted successfully!", {
-      description: "Your item has been added to ShareCycle.",
-    });
-    // Reset form
+  const resetForm = () => {
     setImagePreview(null);
-    onOpenChange(false);
+    setTitle("");
+    setCategory("");
+    setCondition("");
+    setLookingFor("");
+    setExpiryDate("");
+    setPickupLocation("");
+    setDescription("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authToken) {
+      toast.error("กรุณาเข้าสู่ระบบก่อนโพสต์ของ");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          title,
+          category,
+          condition,
+          description,
+          tags: lookingFor ? lookingFor.split(",").map((tag) => tag.trim()) : [],
+          images: imagePreview ? [imagePreview] : [],
+          status: "available",
+        }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.message ?? "โพสต์สินค้าล้มเหลว");
+      }
+
+      toast.success("🌱 โพสต์สำเร็จ", {
+        description: "รายการของคุณถูกเพิ่มบน ShareCycle แล้ว",
+      });
+      resetForm();
+      onOpenChange(false);
+      onItemPosted?.();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error";
+      toast.error("โพสต์สินค้าไม่สำเร็จ", { description: message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -64,22 +127,15 @@ export function PostItemModal({ open, onOpenChange }: PostItemModalProps) {
             <Leaf className="h-5 w-5 text-primary" />
             โพสต์ของเพื่อแลกเปลี่ยน
           </DialogTitle>
-          <DialogDescription>
-            โพสต์ของที่คุณต้องการแลกเปลี่ยนกับชาว CMU
-          </DialogDescription>
+          <DialogDescription>แชร์ของที่คุณอยากแลกกับชาว CMU</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Image Upload - First for better UX */}
           <div className="space-y-2">
-            <Label htmlFor="image">Upload Image *</Label>
+            <Label htmlFor="image">อัปโหลดรูป *</Label>
             {imagePreview ? (
               <div className="relative rounded-xl overflow-hidden border-2 border-primary/20">
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full h-64 object-cover"
-                />
+                <img src={imagePreview} alt="Preview" className="w-full h-64 object-cover" />
                 <Button
                   type="button"
                   variant="destructive"
@@ -97,11 +153,9 @@ export function PostItemModal({ open, onOpenChange }: PostItemModalProps) {
               >
                 <ImageIcon className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">
-                  Click to upload or drag and drop
+                  กดเพื่ออัปโหลดหรือวางไฟล์ที่นี่
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  PNG, JPG up to 5MB
-                </p>
+                <p className="text-xs text-muted-foreground">PNG/JPG สูงสุด 5MB</p>
               </div>
             )}
             <input
@@ -114,43 +168,42 @@ export function PostItemModal({ open, onOpenChange }: PostItemModalProps) {
             />
           </div>
 
-          {/* Item Name */}
           <div className="space-y-2">
-            <Label htmlFor="title">Item Name *</Label>
+            <Label htmlFor="title">ชื่อสินค้า *</Label>
             <Input
               id="title"
-              placeholder="e.g., Calculus Textbook"
+              placeholder="เช่น โต๊ะอ่านหนังสือ"
               className="rounded-xl"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               required
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Category */}
             <div className="space-y-2">
-              <Label htmlFor="category">Category *</Label>
-              <Select required>
+              <Label htmlFor="category">หมวดหมู่ *</Label>
+              <Select value={category} onValueChange={setCategory} required>
                 <SelectTrigger id="category" className="rounded-xl">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="เลือกหมวดหมู่" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="books">📚 Books & Textbooks</SelectItem>
-                  <SelectItem value="clothes">👕 Clothes</SelectItem>
-                  <SelectItem value="electronics">💻 Electronics</SelectItem>
-                  <SelectItem value="dorm">🛏️ Dorm Items</SelectItem>
-                  <SelectItem value="sports">⚽ Sports Equipment</SelectItem>
-                  <SelectItem value="kitchen">🍳 Kitchen Items</SelectItem>
-                  <SelectItem value="other">📦 Other</SelectItem>
+                  <SelectItem value="Books & Textbooks">📚 Books & Textbooks</SelectItem>
+                  <SelectItem value="Clothes">👕 Clothes</SelectItem>
+                  <SelectItem value="Electronics">💻 Electronics</SelectItem>
+                  <SelectItem value="Dorm Items">🛏️ Dorm Items</SelectItem>
+                  <SelectItem value="Sports Equipment">⚽ Sports Equipment</SelectItem>
+                  <SelectItem value="Kitchen">🍳 Kitchen Items</SelectItem>
+                  <SelectItem value="Other">📦 Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Condition */}
             <div className="space-y-2">
-              <Label htmlFor="condition">Condition *</Label>
-              <Select required>
+              <Label htmlFor="condition">สภาพสินค้า *</Label>
+              <Select value={condition} onValueChange={setCondition} required>
                 <SelectTrigger id="condition" className="rounded-xl">
-                  <SelectValue placeholder="Select condition" />
+                  <SelectValue placeholder="เลือกสภาพ" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">⭐ Like New</SelectItem>
@@ -162,62 +215,60 @@ export function PostItemModal({ open, onOpenChange }: PostItemModalProps) {
             </div>
           </div>
 
-          {/* Looking For */}
-          <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/20">
+  <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/20">
             <Label htmlFor="lookingFor" className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4 text-primary" />
-              Looking to Exchange For *
+              ต้องการแลกกับ...
             </Label>
             <Input
               id="lookingFor"
-              placeholder="e.g., Laptop stand, Kitchen utensils, Study desk"
+              placeholder="เช่น Laptop stand, Kitchen utensils"
               className="rounded-xl"
-              required
+              value={lookingFor}
+              onChange={(e) => setLookingFor(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Let others know what you're looking for in exchange
+              คั่นหลายรายการด้วยจุลภาค เช่น "Laptop stand, Lamp"
             </p>
           </div>
 
-          {/* Expiry Date - NEW */}
           <div className="space-y-2 p-4 rounded-xl bg-accent/5 border border-accent/20">
             <Label htmlFor="expiryDate" className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-accent" />
-              วันหมดอายุของโพสต์ *
+              วันหมดอายุของโพสต์ (ไม่บังคับ)
             </Label>
             <Input
               id="expiryDate"
               type="date"
               className="rounded-xl"
-              min={new Date().toISOString().split('T')[0]}
-              required
+              min={new Date().toISOString().split("T")[0]}
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              กำหนดวันที่ต้องการให้โพสต์นี้หมดอายุ (เมื่อครบกำหนด ระบบจะเก็บไว้ในประวัติอัตโนมัติ)
-            </p>
           </div>
 
-          {/* Pickup Location */}
           <div className="space-y-2">
-            <Label htmlFor="location">Pickup Location *</Label>
+            <Label htmlFor="pickupLocation" className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
+              จุดนัดรับของ (แนะนำให้ระบุ)
+            </Label>
             <Input
-              id="location"
-              placeholder="e.g., Engineering Building, Library 1st floor"
+              id="pickupLocation"
+              placeholder="เช่น Ang Kaew, ลานคณะวิศวะ"
               className="rounded-xl"
-              required
+              value={pickupLocation}
+              onChange={(e) => setPickupLocation(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              Specify where people can meet you to exchange/pick up the item
-            </p>
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Description *</Label>
+            <Label htmlFor="description">รายละเอียดเพิ่มเติม *</Label>
             <Textarea
               id="description"
-              placeholder="Describe your item, its features, why you're sharing it..."
-              className="rounded-xl min-h-28"
+              placeholder="อธิบายสภาพสินค้า ขนาด จุดเด่น หรือข้อควรระวัง"
+              className="rounded-xl min-h-32"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               required
             />
           </div>
@@ -226,14 +277,18 @@ export function PostItemModal({ open, onOpenChange }: PostItemModalProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
               className="rounded-xl"
+              onClick={() => {
+                resetForm();
+                onOpenChange(false);
+              }}
+              disabled={isSubmitting}
             >
-              Cancel
+              ยกเลิก
             </Button>
-            <Button type="submit" className="rounded-xl gap-2">
-              <Leaf className="h-4 w-4" />
-              Post Item
+            <Button type="submit" className="rounded-xl gap-2" disabled={isSubmitting}>
+              <Upload className="h-4 w-4" />
+              {isSubmitting ? "กำลังโพสต์..." : "โพสต์ของฉัน"}
             </Button>
           </DialogFooter>
         </form>

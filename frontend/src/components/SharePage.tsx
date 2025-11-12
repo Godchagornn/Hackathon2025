@@ -1,34 +1,53 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ItemCard, type ItemCardProps } from "./ItemCard";
 import { PostItemModal } from "./PostItemModal";
-import { ExchangeRequestModal } from "./ExchangeRequestModal";
 import { Search, Plus, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { ExchangeRequestModal } from "./ExchangeRequestModal";
 
 interface ExchangeItem extends ItemCardProps {
   id: number | string;
   description?: string;
+  ownerId?: number;
 }
 
 interface SharePageProps {
   onNavigate?: (page: string) => void;
   items?: ExchangeItem[];
+  apiBaseUrl: string;
+  authToken: string;
+  activeProfileId: number;
+  onRefreshItems?: () => void;
 }
 
-export function SharePage({ onNavigate, items = [] }: SharePageProps) {
+export function SharePage({
+  onNavigate,
+  items = [],
+  apiBaseUrl,
+  authToken,
+  activeProfileId,
+  onRefreshItems,
+}: SharePageProps) {
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [exchangeModalOpen, setExchangeModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<{ title: string; owner: string } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ExchangeItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [conditionFilter, setConditionFilter] = useState("all");
 
-  const handleExchangeClick = (itemTitle: string, userName: string) => {
-    setSelectedItem({ title: itemTitle, owner: userName });
+  const handleExchangeClick = (item: ExchangeItem) => {
+    if (!authToken) {
+      toast.error("กรุณาเข้าสู่ระบบเพื่อขอแลก");
+      return;
+    }
+    if (!item.ownerId || typeof item.id !== "number") {
+      toast.error("ไม่พบข้อมูลผู้โพสต์");
+      return;
+    }
+    setSelectedItem(item);
     setExchangeModalOpen(true);
   };
 
@@ -195,7 +214,7 @@ export function SharePage({ onNavigate, items = [] }: SharePageProps) {
                 <ItemCard 
                   key={item.id} 
                   {...item} 
-                  onExchangeClick={() => handleExchangeClick(item.title, item.user)}
+                  onExchangeClick={() => handleExchangeClick(item)}
                 />
               ))}
             </div>
@@ -215,13 +234,33 @@ export function SharePage({ onNavigate, items = [] }: SharePageProps) {
         )}
       </div>
 
-      <PostItemModal open={postModalOpen} onOpenChange={setPostModalOpen} />
-      
+      <PostItemModal
+        open={postModalOpen}
+        onOpenChange={setPostModalOpen}
+        apiBaseUrl={apiBaseUrl}
+        authToken={authToken}
+        onItemPosted={onRefreshItems}
+      />
+
       <ExchangeRequestModal
         open={exchangeModalOpen}
         onOpenChange={setExchangeModalOpen}
-        targetItem={selectedItem}
+        targetItem={
+          selectedItem
+            ? {
+                title: selectedItem.title,
+                owner: selectedItem.user,
+                image: selectedItem.image,
+                ownerId: selectedItem.ownerId,
+                itemId: typeof selectedItem.id === "number" ? selectedItem.id : undefined,
+              }
+            : null
+        }
+        requesterId={activeProfileId}
+        apiBaseUrl={apiBaseUrl}
+        authToken={authToken}
       />
+      
     </div>
   );
 }

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     faculty VARCHAR(100),
     bio TEXT,
     avatar_url VARCHAR(500),
+    password_hash TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -128,4 +129,6 @@ CREATE INDEX IF NOT EXISTS idx_requests_requester_id ON exchange_requests(reques
 CREATE INDEX IF NOT EXISTS idx_requests_owner_id ON exchange_requests(owner_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS password_hash TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exchanges_request_id ON exchanges(request_id);

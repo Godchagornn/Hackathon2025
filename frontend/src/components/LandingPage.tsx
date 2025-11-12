@@ -62,13 +62,17 @@ import { toast } from "sonner";
 interface ExchangeItem extends ItemCardProps {
   id: number | string;
   ownerId?: number;
+  description?: string | null;
+  images?: string[];
 }
 
 interface LandingPageProps {
   onNavigate: (page: string) => void;
   activeProfileId: number;
   apiBaseUrl: string;
-  availableItems?: ExchangeItem[];
+  authToken: string;
+  items?: ExchangeItem[];
+  onRefreshItems?: () => void;
 }
 
 const categories = [
@@ -80,7 +84,14 @@ const categories = [
   { name: "Electronics", icon: Laptop, color: "text-green-600", bgColor: "bg-green-50", borderColor: "border-green-200" },
 ];
 
-export function LandingPage({ onNavigate, activeProfileId, apiBaseUrl, availableItems = [] }: LandingPageProps) {
+export function LandingPage({
+  onNavigate,
+  activeProfileId,
+  apiBaseUrl,
+  authToken,
+  items = [],
+  onRefreshItems,
+}: LandingPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [exchangeModalOpen, setExchangeModalOpen] = useState(false);
@@ -91,8 +102,6 @@ export function LandingPage({ onNavigate, activeProfileId, apiBaseUrl, available
     ownerId?: number;
     itemId?: number;
   } | null>(null);
-  const items: ExchangeItem[] = availableItems;
-
   const handleExchangeClick = (item: ExchangeItem) => {
     const numericItemId = Number(item.id);
     setSelectedItem({
@@ -303,6 +312,9 @@ export function LandingPage({ onNavigate, activeProfileId, apiBaseUrl, available
       <PostItemModal
         open={postModalOpen}
         onOpenChange={setPostModalOpen}
+        apiBaseUrl={apiBaseUrl}
+        authToken={authToken}
+        onItemPosted={onRefreshItems}
       />
 
       {/* Exchange Request Modal */}
@@ -312,6 +324,7 @@ export function LandingPage({ onNavigate, activeProfileId, apiBaseUrl, available
         targetItem={selectedItem}
         requesterId={activeProfileId}
         apiBaseUrl={apiBaseUrl}
+        authToken={authToken}
       />
     </div>
   );

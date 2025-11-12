@@ -4,10 +4,12 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Leaf, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
+import { API_BASE_URL } from "../config";
+import type { AuthSessionPayload } from "../types/auth";
 
 interface LoginPageProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (session: AuthSessionPayload) => void;
   onNavigateToRegister: () => void;
 }
 
@@ -15,16 +17,38 @@ export function LoginPage({ onLoginSuccess, onNavigateToRegister }: LoginPagePro
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast.error("กรุณากรอกอีเมลและรหัสผ่าน");
       return;
     }
 
-    toast.success("เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับสู่ CMU ShareCycle");
-    onLoginSuccess();
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.message ?? "เข้าสู่ระบบไม่สำเร็จ");
+      }
+
+      toast.success("เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับสู่ CMU ShareCycle");
+      onLoginSuccess(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error";
+      toast.error("เข้าสู่ระบบไม่สำเร็จ", { description: message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -154,12 +178,8 @@ export function LoginPage({ onLoginSuccess, onNavigateToRegister }: LoginPagePro
                   </button>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full rounded-xl"
-                  size="lg"
-                >
-                  เข้าสู่ระบบ
+                <Button type="submit" className="w-full rounded-xl" size="lg" disabled={isSubmitting}>
+                  {isSubmitting ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
                 </Button>
 
                 <div className="relative my-6">

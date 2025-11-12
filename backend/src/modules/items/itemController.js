@@ -1,49 +1,98 @@
-const itemService = require('../itemService');
+const itemService = require('./itemService');
 
-exports.getItems = async (req, res, next) => {
+async function listItems(req, res, next) {
   try {
-    const result = await itemService.getAllItems(req.query);
-    res.json(result);
-  } catch (err) {
-    next(err);
+    const data = await itemService.listItems(req.query || {});
+    res.json(data);
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-exports.getItemById = async (req, res, next) => {
+async function getItem(req, res, next) {
   try {
-    const item = await itemService.getItemById(req.params.itemId);
-    if (!item) return res.status(404).json({ message: 'Item not found' });
+    const itemId = Number(req.params.itemId);
+    if (Number.isNaN(itemId)) {
+      return res.status(400).json({ message: 'itemId ไม่ถูกต้อง' });
+    }
+    const item = await itemService.getItem(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'ไม่พบสินค้า' });
+    }
     res.json({ item });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-exports.createItem = async (req, res, next) => {
+async function createItem(req, res, next) {
   try {
-    const item = await itemService.createItem(req.body, req.user.id);
-    res.status(201).json({ success: true, item });
-  } catch (err) {
-    next(err);
+    const item = await itemService.createItem(req.body || {}, req.userId);
+    res.status(201).json({ item });
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-exports.updateItem = async (req, res, next) => {
+async function updateItem(req, res, next) {
   try {
-    const item = await itemService.updateItem(req.params.itemId, req.body, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or unauthorized' });
-    res.json({ success: true, item });
-  } catch (err) {
-    next(err);
+    const itemId = Number(req.params.itemId);
+    if (Number.isNaN(itemId)) {
+      return res.status(400).json({ message: 'itemId ไม่ถูกต้อง' });
+    }
+    const item = await itemService.updateItem(itemId, req.userId, req.body || {});
+    if (!item) {
+      return res.status(404).json({ message: 'ไม่พบสินค้า หรือไม่มีสิทธิ์แก้ไข' });
+    }
+    res.json({ item });
+  } catch (error) {
+    next(error);
   }
-};
+}
 
-exports.deleteItem = async (req, res, next) => {
+async function deleteItem(req, res, next) {
   try {
-    const success = await itemService.deleteItem(req.params.itemId, req.user.id);
-    if (!success) return res.status(404).json({ message: 'Item not found or unauthorized' });
-    res.json({ success });
-  } catch (err) {
-    next(err);
+    const itemId = Number(req.params.itemId);
+    if (Number.isNaN(itemId)) {
+      return res.status(400).json({ message: 'itemId ไม่ถูกต้อง' });
+    }
+    const success = await itemService.deleteItem(itemId, req.userId);
+    if (!success) {
+      return res.status(404).json({ message: 'ไม่พบสินค้า หรือไม่มีสิทธิ์ลบ' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
   }
+}
+
+async function requestExchange(req, res, next) {
+  try {
+    const itemId = Number(req.params.itemId);
+    if (Number.isNaN(itemId)) {
+      return res.status(400).json({ message: 'itemId ไม่ถูกต้อง' });
+    }
+
+    const message = req.body?.message || '';
+    const offer = req.body?.offer || {};
+    const notification = await itemService.createExchangeRequest({
+      itemId,
+      requesterId: req.userId,
+      message,
+      offer,
+    });
+
+    res.status(201).json({ notification });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = {
+  listItems,
+  getItem,
+  createItem,
+  updateItem,
+  deleteItem,
+  requestExchange,
 };

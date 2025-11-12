@@ -7,6 +7,11 @@ function parseIds(req, res) {
     return null;
   }
 
+  if (req.userId && req.userId !== userId) {
+    res.status(403).json({ message: 'ไม่สามารถเข้าถึงข้อมูลผู้ใช้อื่นได้' });
+    return null;
+  }
+
   const notificationId = req.params.notificationId
     ? Number(req.params.notificationId)
     : null;
