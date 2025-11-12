@@ -1,39 +1,35 @@
-const itemService = require('../itemService');
+import * as itemService from './itemService.js';
 
-// GET /api/items
-exports.getItems = async (req, res, next) => {
+export const getItems = async (req, res, next) => {
   try {
     const result = await itemService.getAllItems(req.query);
-    res.json(result); // { items, total, page, totalPages }
+    res.json(result);
   } catch (err) {
     next(err);
   }
 };
 
-// GET /api/items/featured
-exports.getFeatured = async (req, res, next) => {
+export const getFeatured = async (req, res, next) => {
   try {
     const limit = req.query.limit || 6;
     const items = await itemService.getFeatured(limit);
-    res.json(items); // { items: [] }
+    res.json({ items });
   } catch (err) {
     next(err);
   }
 };
 
-// GET /api/items/recommended
-exports.getRecommended = async (req, res, next) => {
+export const getRecommended = async (req, res, next) => {
   try {
     const limit = req.query.limit || 10;
     const items = await itemService.getRecommended(req.user, limit);
-    res.json(items); // { items: [] }
+    res.json({ items });
   } catch (err) {
     next(err);
   }
 };
 
-// GET /api/items/:itemId
-exports.getItemById = async (req, res, next) => {
+export const getItemById = async (req, res, next) => {
   try {
     const item = await itemService.getItemById(req.params.itemId);
     if (!item) return res.status(404).json({ message: 'Item not found' });
@@ -43,11 +39,10 @@ exports.getItemById = async (req, res, next) => {
   }
 };
 
-// GET /api/items/categories
-exports.getCategories = async (req, res, next) => {
+export const getCategories = async (req, res, next) => {
   try {
     const categories = await itemService.getCategories();
-    res.json(categories); // { categories: [] }
+    res.json(categories);
   } catch (err) {
     next(err);
   }

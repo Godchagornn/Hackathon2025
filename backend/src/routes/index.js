@@ -1,13 +1,13 @@
 const express = require('express');
 const profileRoutes = require('../modules/profile/profileRoutes');
 const notificationRoutes = require('../modules/notifications/notificationRoutes');
-const itemRoutes = require('../modules/items/itemRoutes');
-const itemController = require('../modules/items/itemController');
+const itemRoutes = require('./modules/items/itemRoutes');
 
 const router = express.Router();
+const app = express();
 
-router.use('/items', itemRoutes);
-router.get('/categories', itemController.getCategories);
+app.use(express.json());
+app.use('/api/items', itemRoutes);
 
 // Search & Filter routes
 router.get('/items/search', searchController.searchItems);
