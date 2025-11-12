@@ -3,7 +3,6 @@
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "install:frontend": "npm --prefix frontend install",
-    "postinstall": "npm run install:frontend",
     "server": "node backend/src/server.js",
     "db:schema": "psql \"$DATABASE_URL\" -f backend/src/database/schema.sql"
   },
@@ -14,6 +13,7 @@
   },
   "dependencies": {
     "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "pg": "^8.16.3"
   }
 }
